@@ -32,7 +32,7 @@ Work with your team on shared content.
 
 ---
 
-## 🛠 Command Reference
+## Command Reference
 
 | Command | Description |
 | :--- | :--- |
