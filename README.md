@@ -1,4 +1,4 @@
-# 🤖 QuizBot - Advanced Telegram Learning & Analytics
+# QuizBot - Advanced Telegram Learning & Analytics
 
 [![GitHub license](https://img.shields.io/badge/license-ISC-blue.svg)](https://github.com/soltsega/Quizbot/blob/main/LICENSE)
 [![Bot Framework](https://img.shields.io/badge/Framework-Telegraf-blue?logo=telegram)](https://telegraf.js.org/)
@@ -7,7 +7,7 @@ A professional, feature-rich Telegram Bot designed to replicate and extend the o
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 ### 🔹 Core Quiz Creation
 Replicates the seamless flow of the official bot.
@@ -15,17 +15,17 @@ Replicates the seamless flow of the official bot.
 - **Native Poll Support**: Send polls directly to the bot to build your quiz.
 - **Persistent Storage**: All quizzes are saved securely in a local JSON database.
 
-### 📊 Advanced Analytics
+### Advanced Analytics
 Go beyond simple scores with professional data exports.
 - **CSV Export**: Download detailed attempt statistics for any quiz.
 - **Performance Tracking**: Monitor user scores, timestamps, and usernames.
 
-### 📂 Workbook System (NEW)
+### Workbook System (NEW)
 Group multiple quizzes into cohesive educational blocks.
 - **Cumulative Leaderboards**: Aggregate scores across an entire workbook.
 - **Consolidated Exports**: Download a bird's-eye view of all quizzes in a workbook.
 
-### 🤝 Seamless Collaboration
+### Seamless Collaboration
 Work with your team on shared content.
 - **Multi-user Access**: Assign "Collaborators" to your workbooks.
 - **Shared Management**: Collaborators can add quizzes and view stats without owning the workbook.
@@ -49,7 +49,7 @@ Work with your team on shared content.
 
 ---
 
-## ⚙️ Setup & Installation
+## Setup & Installation
 
 ### 1️⃣ Prerequisites
 - **Node.js** (v16.x or higher)
@@ -76,7 +76,7 @@ npm start
 
 ---
 
-## 🏗 System Architecture
+## System Architecture
 
 ```mermaid
 graph TD
@@ -95,5 +95,3 @@ graph TD
 This project is licensed under the **ISC License**.
 
 ---
-
-**Made with ❤️ for the Community.**
