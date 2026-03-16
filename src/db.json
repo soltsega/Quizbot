@@ -1,5 +1,38 @@
 {
-  "quizzes": {},
+  "quizzes": {
+    "quiz_1773686816328": {
+      "id": "quiz_1773686816328",
+      "owner": 5416324140,
+      "title": "mine",
+      "description": "this is mine",
+      "questions": [
+        {
+          "question": "mine",
+          "options": [
+            "mine",
+            "mine",
+            "mine"
+          ],
+          "type": "regular"
+        },
+        {
+          "question": "mine",
+          "options": [
+            "rho",
+            "jdfkla",
+            "sdlkfa"
+          ],
+          "correct_option_id": 2,
+          "type": "quiz"
+        }
+      ],
+      "createdAt": "2026-03-16T18:46:56.328Z",
+      "stats": {
+        "attempts": 0,
+        "scores": []
+      }
+    }
+  },
   "workbooks": {},
   "users": {}
 }

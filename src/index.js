@@ -6,8 +6,28 @@ require('dotenv').config();
 const DB_PATH = path.join(__dirname, 'db.json');
 
 // Helper to read/write DB
-const readDB = () => JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-const saveDB = (data) => fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+const readDB = () => {
+    if (!fs.existsSync(DB_PATH)) {
+        const initialDB = { quizzes: {}, workbooks: {}, users: {} };
+        fs.writeFileSync(DB_PATH, JSON.stringify(initialDB, null, 2));
+        return initialDB;
+    }
+    try {
+        const content = fs.readFileSync(DB_PATH, 'utf-8');
+        return JSON.parse(content || '{"quizzes": {}, "workbooks": {}, "users": {}}');
+    } catch (err) {
+        console.error('Error reading DB:', err);
+        return { quizzes: {}, workbooks: {}, users: {} };
+    }
+};
+
+const saveDB = (data) => {
+    const dir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+};
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
@@ -30,7 +50,7 @@ bot.help((ctx) => {
 
 // Create Quiz Flow
 bot.command('newquiz', (ctx) => {
-    ctx.session = { state: 'WAITING_TITLE' };
+    ctx.session = { state: 'WAITING_TITLE', questions: [] };
     ctx.reply('Let\'s create a new quiz! 📝\n\nFirst, send me the **title** of your quiz.');
 });
 
@@ -39,9 +59,39 @@ bot.command('cancel', (ctx) => {
     ctx.reply('Current operation cancelled. 🛑');
 });
 
-bot.on('text', (ctx) => {
+// Middleware to catch /done and /cancel before text handler
+bot.use(async (ctx, next) => {
+    if (ctx.message && ctx.message.text) {
+        if (ctx.message.text === '/done' && ctx.session && ctx.session.state === 'WAITING_QUESTIONS') {
+            const session = ctx.session;
+            if (session.questions.length === 0) {
+                return ctx.reply('You haven\'t added any questions yet! Please send at least one poll.');
+            }
+
+            const db = readDB();
+            const quizId = `quiz_${Date.now()}`;
+            db.quizzes[quizId] = {
+                id: quizId,
+                owner: ctx.from.id,
+                title: session.title,
+                description: session.description,
+                questions: session.questions,
+                createdAt: new Date().toISOString(),
+                stats: { attempts: 0, scores: [] }
+            };
+            saveDB(db);
+
+            ctx.session = null;
+            ctx.reply(`Congratulations! Your quiz "${session.title}" is ready and saved. 🎉\n\nYou can now share it or play it using \`/play ${quizId}\`.`);
+            return;
+        }
+    }
+    return next();
+});
+
+bot.on('text', (ctx, next) => {
     const session = ctx.session;
-    if (!session) return;
+    if (!session || !session.state) return next();
 
     if (session.state === 'WAITING_TITLE') {
         session.title = ctx.message.text;
@@ -53,51 +103,138 @@ bot.on('text', (ctx) => {
     if (session.state === 'WAITING_DESCRIPTION') {
         session.description = ctx.message.text;
         session.state = 'WAITING_QUESTIONS';
-        session.questions = [];
         ctx.reply(
             `Description set! ✅\n\nNow, send me your **questions**. \n\nYou should send them as **polls** or **quizzes** by clicking the attachment icon (📎) and choosing "Poll".\n\nWhen you are finished, send /done.`
         );
         return;
     }
-
-    if (session.state === 'WAITING_QUESTIONS' && ctx.message.text === '/done') {
-        if (session.questions.length === 0) {
-            return ctx.reply('You haven\'t added any questions yet! Please send at least one poll.');
-        }
-
-        const db = readDB();
-        const quizId = `quiz_${Date.now()}`;
-        db.quizzes[quizId] = {
-            id: quizId,
-            owner: ctx.from.id,
-            title: session.title,
-            description: session.description,
-            questions: session.questions,
-            createdAt: new Date().toISOString(),
-            stats: { attempts: 0, scores: [] }
-        };
-        saveDB(db);
-
-        ctx.session = null;
-        ctx.reply(`Congratulations! Your quiz "${session.title}" is ready and saved. 🎉\n\nYou can now share it or add it to a workbook.`);
-        return;
-    }
+    return next();
 });
 
 // Handle incoming polls/quizzes for the creation flow
-bot.on('poll', (ctx) => {
+bot.on(['poll', 'message'], (ctx, next) => {
     const session = ctx.session;
-    if (!session || session.state !== 'WAITING_QUESTIONS') return;
+    const poll = ctx.poll || (ctx.message && ctx.message.poll);
+    
+    if (!poll || !session || session.state !== 'WAITING_QUESTIONS') return next();
 
-    const poll = ctx.poll;
     session.questions.push({
         question: poll.question,
-        options: poll.options.map(o => o.text),
+        options: poll.options.map(o => o.text || o),
         correct_option_id: poll.correct_option_id,
         type: poll.type
     });
 
     ctx.reply(`Question added! (${session.questions.length} total). Send another poll or /done when finished.`);
+});
+
+// Play Quiz Command
+bot.command('play', (ctx) => {
+    const args = ctx.message.text.split(' ');
+    if (args.length < 2) return ctx.reply('Usage: /play <quiz_id>');
+
+    const qId = args[1];
+    const db = readDB();
+    const quiz = db.quizzes[qId];
+
+    if (!quiz) return ctx.reply('Quiz not found.');
+
+    // Initialize Quiz Session
+    ctx.session = {
+        state: 'PLAYING',
+        quizId: qId,
+        currentQuestionIndex: 0,
+        score: 0,
+        startTime: Date.now()
+    };
+
+    ctx.reply(`Starting quiz: **${quiz.title}**\n\n${quiz.description}\n\nGet ready! First question is coming...`);
+    
+    setTimeout(() => sendNextQuestion(ctx, quiz), 1500);
+});
+
+async function sendNextQuestion(ctx, quiz) {
+    const session = ctx.session;
+    if (!session || session.state !== 'PLAYING') return;
+
+    const index = session.currentQuestionIndex;
+    if (index >= quiz.questions.length) {
+        return finishQuiz(ctx, quiz);
+    }
+
+    const q = quiz.questions[index];
+    try {
+        if (q.type === 'quiz') {
+            await ctx.replyWithQuiz(q.question, q.options, {
+                correct_option_id: q.correct_option_id,
+                is_anonymous: false
+            });
+        } else {
+            await ctx.replyWithPoll(q.question, q.options, {
+                is_anonymous: false
+            });
+        }
+    } catch (err) {
+        console.error('Error sending question:', err);
+        ctx.reply('Oops, something went wrong sending the question. Continuing...');
+        session.currentQuestionIndex++;
+        sendNextQuestion(ctx, quiz);
+    }
+}
+
+async function finishQuiz(ctx, quiz) {
+    const session = ctx.session;
+    const score = session.score;
+    const total = quiz.questions.length;
+    const userId = ctx.from.id;
+    const username = ctx.from.username || ctx.from.first_name;
+
+    // Save stats
+    const db = readDB();
+    const targetQuiz = db.quizzes[quiz.id];
+    if (targetQuiz) {
+        targetQuiz.stats.attempts++;
+        targetQuiz.stats.scores.push({
+            userId,
+            username,
+            score,
+            date: new Date().toISOString()
+        });
+        saveDB(db);
+    }
+
+    ctx.reply(
+        `Quiz Completed! 🏁\n\n` +
+        `Your score: **${score}/${total}**\n\n` +
+        `Thanks for playing! Use /quizzes to see more.`
+    );
+    ctx.session = null;
+}
+
+// Global handler for poll answers to progress the quiz
+bot.on('poll_answer', async (ctx) => {
+    const session = ctx.session;
+    if (!session || session.state !== 'PLAYING') return;
+
+    const db = readDB();
+    const quiz = db.quizzes[session.quizId];
+    if (!quiz) return;
+
+    const index = session.currentQuestionIndex;
+    const q = quiz.questions[index];
+    const answer = ctx.pollAnswer;
+    
+    // Check if the answer is correct
+    if (q.type === 'quiz' && answer.option_ids[0] === q.correct_option_id) {
+        session.score++;
+    } else if (q.type !== 'quiz') {
+        // For regular polls, we just count it as part of completion
+    }
+
+    session.currentQuestionIndex++;
+    
+    // Slight delay before next question for "official" feel
+    setTimeout(() => sendNextQuestion(ctx, quiz), 1000);
 });
 
 bot.command('quizzes', (ctx) => {
