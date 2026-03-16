@@ -44,8 +44,32 @@ bot.help((ctx) => {
         '/newquiz - Create a new quiz\n' +
         '/quizzes - List your quizzes\n' +
         '/newworkbook - Create a workbook for your quizzes (Advanced)\n' +
+        '/myid - Get your Telegram User ID\n' +
         '/cancel - Abort current operation'
     );
+});
+
+bot.command('myid', (ctx) => {
+    ctx.reply(`Your Telegram User ID is: \`${ctx.from.id}\` (Click to copy).`);
+});
+
+bot.command('backup', async (ctx) => {
+    const adminId = process.env.ADMIN_ID;
+    if (!adminId) {
+        return ctx.reply('Admin ID not configured in .env. Please add ADMIN_ID=your_id to your environment.');
+    }
+
+    if (ctx.from.id.toString() !== adminId.toString()) {
+        return ctx.reply('Unauthorized. Only the bot administrator can perform backups.');
+    }
+
+    try {
+        await ctx.replyWithDocument({ source: DB_PATH, filename: 'quizbot_db_backup.json' });
+        ctx.reply('Database backup sent successfully! 💾');
+    } catch (err) {
+        console.error('Backup error:', err);
+        ctx.reply('Failed to send backup. Check server logs.');
+    }
 });
 
 // Create Quiz Flow
