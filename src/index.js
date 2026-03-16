@@ -59,9 +59,9 @@ bot.command('cancel', (ctx) => {
     ctx.reply('Current operation cancelled. 🛑');
 });
 
-bot.on('text', (ctx) => {
+bot.on('text', (ctx, next) => {
     const session = ctx.session;
-    if (!session) return;
+    if (!session || !session.state) return next();
 
     if (session.state === 'WAITING_TITLE') {
         session.title = ctx.message.text;
@@ -99,25 +99,58 @@ bot.on('text', (ctx) => {
         saveDB(db);
 
         ctx.session = null;
-        ctx.reply(`Congratulations! Your quiz "${session.title}" is ready and saved. 🎉\n\nYou can now share it or add it to a workbook.`);
+        ctx.reply(`Congratulations! Your quiz "${session.title}" is ready and saved. 🎉\n\nYou can now share it or play it using \`/play ${quizId}\`.`);
         return;
     }
+    return next();
 });
 
 // Handle incoming polls/quizzes for the creation flow
-bot.on('poll', (ctx) => {
+bot.on(['poll', 'message'], (ctx, next) => {
     const session = ctx.session;
-    if (!session || session.state !== 'WAITING_QUESTIONS') return;
+    const poll = ctx.poll || (ctx.message && ctx.message.poll);
+    
+    if (!poll || !session || session.state !== 'WAITING_QUESTIONS') return next();
 
-    const poll = ctx.poll;
     session.questions.push({
         question: poll.question,
-        options: poll.options.map(o => o.text),
+        options: poll.options.map(o => o.text || o), // Options can be strings or objects
         correct_option_id: poll.correct_option_id,
         type: poll.type
     });
 
     ctx.reply(`Question added! (${session.questions.length} total). Send another poll or /done when finished.`);
+});
+
+// Play Quiz Command
+bot.command('play', (ctx) => {
+    const args = ctx.message.text.split(' ');
+    if (args.length < 2) return ctx.reply('Usage: /play <quiz_id>');
+
+    const qId = args[1];
+    const db = readDB();
+    const quiz = db.quizzes[qId];
+
+    if (!quiz) return ctx.reply('Quiz not found.');
+
+    ctx.reply(`Starting quiz: **${quiz.title}**\n\n${quiz.description}\n\nGet ready!`);
+    
+    // Simple play logic: send all polls one by one
+    // In a real bot, we'd send them with delays or wait for answers
+    quiz.questions.forEach((q, i) => {
+        setTimeout(() => {
+            if (q.type === 'quiz') {
+                ctx.replyWithQuiz(q.question, q.options, {
+                    correct_option_id: q.correct_option_id,
+                    is_anonymous: false
+                });
+            } else {
+                ctx.replyWithPoll(q.question, q.options, {
+                    is_anonymous: false
+                });
+            }
+        }, (i + 1) * 2000); // 2 second delay between questions
+    });
 });
 
 bot.command('quizzes', (ctx) => {
