@@ -6,8 +6,28 @@ require('dotenv').config();
 const DB_PATH = path.join(__dirname, 'db.json');
 
 // Helper to read/write DB
-const readDB = () => JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-const saveDB = (data) => fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+const readDB = () => {
+    if (!fs.existsSync(DB_PATH)) {
+        const initialDB = { quizzes: {}, workbooks: {}, users: {} };
+        fs.writeFileSync(DB_PATH, JSON.stringify(initialDB, null, 2));
+        return initialDB;
+    }
+    try {
+        const content = fs.readFileSync(DB_PATH, 'utf-8');
+        return JSON.parse(content || '{"quizzes": {}, "workbooks": {}, "users": {}}');
+    } catch (err) {
+        console.error('Error reading DB:', err);
+        return { quizzes: {}, workbooks: {}, users: {} };
+    }
+};
+
+const saveDB = (data) => {
+    const dir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+};
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
